@@ -18,7 +18,21 @@ class MockWorksheet:
         self.rows.append(list(row))
 
     def update(self, values: list[list], range_name: str | None = None, **kwargs):
-        self.rows = [list(r) for r in values]
+        import re
+        if range_name and range_name.startswith("H"):
+            m = re.search(r"\d+", range_name)
+            if m:
+                row_idx = int(m.group()) - 1
+                if 0 <= row_idx < len(self.rows):
+                    self.rows[row_idx][7] = values[0][0]
+        elif range_name and range_name.startswith("A"):
+            m = re.search(r"\d+", range_name)
+            if m:
+                row_idx = int(m.group()) - 1
+                if 0 <= row_idx < len(self.rows):
+                    self.rows[row_idx] = list(values[0])
+        else:
+            self.rows = [list(r) for r in values]
 
     def delete_rows(self, row_index: int):
         if 1 <= row_index <= len(self.rows):
@@ -238,3 +252,24 @@ async def test_update_settings_allowed_and_disallowed(mock_sheets_service):
     })
     assert updated["TARGET_CALORIES"] == 1850.0
     assert updated["TIMEZONE"] == "Asia/Almaty"
+
+
+@pytest.mark.asyncio
+async def test_undoable_actions_workflow(mock_sheets_service):
+    action_id = await mock_sheets_service.log_action(
+        action_type="ADD_FOOD",
+        entity_type="DiaryRecord",
+        entity_id="rec-abc",
+        after_json='{"name": "Обед"}',
+    )
+    action = await mock_sheets_service.get_last_undoable_action()
+    assert action is not None
+    assert action["action_id"] == action_id
+    assert action["action_type"] == "ADD_FOOD"
+    assert action["entity_id"] == "rec-abc"
+
+    ok = await mock_sheets_service.mark_action_undone(action_id)
+    assert ok is True
+
+    action_after = await mock_sheets_service.get_last_undoable_action()
+    assert action_after is None

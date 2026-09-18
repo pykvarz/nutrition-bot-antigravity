@@ -78,10 +78,33 @@ async def test_handle_add_activity(mock_sheets):
 
 
 @pytest.mark.asyncio
-async def test_handle_undo(mock_sheets):
+async def test_handle_undo_add_food(mock_sheets):
     nutrition_service = NutritionService()
-    last_rec = DiaryRecord(
-        id="rec-to-undo",
+    mock_sheets.get_last_undoable_action = AsyncMock(return_value={
+        "action_id": "act-1",
+        "action_type": "ADD_FOOD",
+        "entity_id": "rec-to-undo",
+        "before_json": "",
+    })
+    mock_sheets.delete_diary_record = AsyncMock(return_value=True)
+    mock_sheets.mark_action_undone = AsyncMock(return_value=True)
+
+    handler = DomainHandler(sheets_service=mock_sheets, nutrition_service=nutrition_service)
+    intent = ParsedIntent(intent=IntentType.UNDO, raw_text="отмени")
+
+    response_text = await handler.process_intent(intent, update_id=203)
+
+    assert "отменено" in response_text.lower()
+    assert mock_sheets.delete_diary_record.called
+    assert mock_sheets.delete_diary_record.call_args[0][0] == "rec-to-undo"
+    assert mock_sheets.mark_action_undone.called
+
+
+@pytest.mark.asyncio
+async def test_handle_undo_delete_record(mock_sheets):
+    nutrition_service = NutritionService()
+    rec = DiaryRecord(
+        id="rec-restored-99",
         telegram_update_id=199,
         real_time=datetime.now(timezone.utc),
         food_date=date(2026, 9, 18),
@@ -90,16 +113,73 @@ async def test_handle_undo(mock_sheets):
         source="text",
         json_structure="{}",
     )
-    mock_sheets.get_last_diary_record.return_value = last_rec
+    mock_sheets.get_last_undoable_action = AsyncMock(return_value={
+        "action_id": "act-2",
+        "action_type": "DELETE",
+        "entity_id": "rec-restored-99",
+        "before_json": rec.model_dump_json(),
+    })
+    mock_sheets.add_diary_record = AsyncMock(return_value=True)
+    mock_sheets.mark_action_undone = AsyncMock(return_value=True)
+
+    handler = DomainHandler(sheets_service=mock_sheets, nutrition_service=nutrition_service)
+    intent = ParsedIntent(intent=IntentType.UNDO, raw_text="верни обратно")
+
+    response_text = await handler.process_intent(intent, update_id=204)
+
+    assert "восстановлена" in response_text.lower()
+    assert "Пицца" in response_text
+    assert mock_sheets.add_diary_record.called
+    restored: DiaryRecord = mock_sheets.add_diary_record.call_args[0][0]
+    assert restored.id == "rec-restored-99"
+    assert restored.calories == 800
+    assert mock_sheets.mark_action_undone.called
+
+
+@pytest.mark.asyncio
+async def test_handle_undo_scale_half(mock_sheets):
+    nutrition_service = NutritionService()
+    rec = DiaryRecord(
+        id="rec-half-1",
+        telegram_update_id=200,
+        real_time=datetime.now(timezone.utc),
+        food_date=date(2026, 9, 18),
+        name="Овсянка",
+        calories=360,
+        source="text",
+        json_structure="{}",
+    )
+    mock_sheets.get_last_undoable_action = AsyncMock(return_value={
+        "action_id": "act-3",
+        "action_type": "SCALE_HALF",
+        "entity_id": "rec-half-1",
+        "before_json": rec.model_dump_json(),
+    })
+    mock_sheets.update_diary_record = AsyncMock(return_value=True)
+    mock_sheets.mark_action_undone = AsyncMock(return_value=True)
 
     handler = DomainHandler(sheets_service=mock_sheets, nutrition_service=nutrition_service)
     intent = ParsedIntent(intent=IntentType.UNDO, raw_text="отмени")
 
-    response_text = await handler.process_intent(intent, update_id=203)
+    response_text = await handler.process_intent(intent, update_id=205)
 
-    assert "Пицца" in response_text
-    assert mock_sheets.delete_diary_record.called
-    assert mock_sheets.delete_diary_record.call_args[0][0] == "rec-to-undo"
+    assert "восстановлена" in response_text.lower()
+    assert "Овсянка" in response_text
+    assert mock_sheets.update_diary_record.called
+    assert mock_sheets.mark_action_undone.called
+
+
+@pytest.mark.asyncio
+async def test_handle_undo_idempotency_empty(mock_sheets):
+    nutrition_service = NutritionService()
+    mock_sheets.get_last_undoable_action = AsyncMock(return_value=None)
+
+    handler = DomainHandler(sheets_service=mock_sheets, nutrition_service=nutrition_service)
+    intent = ParsedIntent(intent=IntentType.UNDO, raw_text="отмени")
+
+    response_text = await handler.process_intent(intent, update_id=206)
+
+    assert "нет действий для отмены" in response_text.lower()
 
 
 @pytest.mark.asyncio

@@ -373,3 +373,38 @@ class SheetsService:
             "False",
         ])
         return action_id
+
+    async def get_last_undoable_action(self) -> Optional[Dict[str, Any]]:
+        return await asyncio.to_thread(self._sync_get_last_undoable_action)
+
+    def _sync_get_last_undoable_action(self) -> Optional[Dict[str, Any]]:
+        ws = self._get_spreadsheet().worksheet("История_действий")
+        rows = ws.get_all_values()
+        for idx in range(len(rows) - 1, 0, -1):
+            row = rows[idx]
+            if len(row) >= 8 and str(row[7]).strip().lower() == "false":
+                return {
+                    "action_id": row[0],
+                    "time": row[1],
+                    "action_type": row[2],
+                    "entity_type": row[3],
+                    "entity_id": row[4],
+                    "before_json": row[5],
+                    "after_json": row[6],
+                    "row_idx": idx + 1,
+                }
+        return None
+
+    async def mark_action_undone(self, action_id: str) -> bool:
+        return await asyncio.to_thread(self._sync_mark_action_undone, action_id)
+
+    def _sync_mark_action_undone(self, action_id: str) -> bool:
+        ws = self._get_spreadsheet().worksheet("История_действий")
+        rows = ws.get_all_values()
+        for idx in range(len(rows) - 1, 0, -1):
+            row = rows[idx]
+            if row and row[0] == action_id:
+                row_idx = idx + 1
+                ws.update([["True"]], f"H{row_idx}")
+                return True
+        return False

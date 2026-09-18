@@ -280,18 +280,50 @@ class DomainHandler:
         )
 
     async def _handle_undo(self) -> str:
-        last_rec = await self.sheets_service.get_last_diary_record()
-        if not last_rec:
-            return "Нет записей для отмены."
+        action = await self.sheets_service.get_last_undoable_action()
+        if not action:
+            return "Нет действий для отмены."
 
-        await self.sheets_service.delete_diary_record(last_rec.id)
-        await self.sheets_service.log_action(
-            action_type="UNDO",
-            entity_type="DiaryRecord",
-            entity_id=last_rec.id,
-            before_json=last_rec.json_structure,
-        )
-        return f"🗑 <b>Запись отменена</b>: {last_rec.name} ({last_rec.calories:g} ккал)"
+        action_id = action["action_id"]
+        action_type = action["action_type"]
+        entity_id = action["entity_id"]
+        before_json = action.get("before_json")
+
+        if action_type in ("ADD_FOOD", "ADD_ACTIVITY", "REPEAT"):
+            await self.sheets_service.delete_diary_record(entity_id)
+            await self.sheets_service.mark_action_undone(action_id)
+            return "↩️ <b>Действие отменено</b>: запись удалена из дневника."
+
+        elif action_type == "DELETE":
+            if before_json:
+                restored_rec = DiaryRecord.model_validate_json(before_json)
+                await self.sheets_service.add_diary_record(restored_rec)
+                await self.sheets_service.mark_action_undone(action_id)
+                return f"↩️ <b>Запись восстановлена</b>: {restored_rec.name} ({restored_rec.calories:g} ккал)"
+            await self.sheets_service.mark_action_undone(action_id)
+            return "↩️ Действие отменено."
+
+        elif action_type == "SCALE_HALF":
+            if before_json:
+                restored_rec = DiaryRecord.model_validate_json(before_json)
+                await self.sheets_service.update_diary_record(restored_rec)
+                await self.sheets_service.mark_action_undone(action_id)
+                return f"↩️ <b>Порция восстановлена</b>: {restored_rec.name} ({restored_rec.calories:g} ккал)"
+            await self.sheets_service.mark_action_undone(action_id)
+            return "↩️ Действие отменено."
+
+        elif action_type == "UPDATE_SETTINGS":
+            if before_json:
+                prev_settings = json.loads(before_json)
+                await self.sheets_service.update_settings(prev_settings)
+                await self.sheets_service.mark_action_undone(action_id)
+                return "↩️ <b>Настройки возвращены к предыдущим значениям.</b>"
+            await self.sheets_service.mark_action_undone(action_id)
+            return "↩️ Действие отменено."
+
+        else:
+            await self.sheets_service.mark_action_undone(action_id)
+            return "↩️ Действие отменено."
 
     def _generate_quick_advice(self, records: list[DiaryRecord], targets: dict[str, Any]) -> str:
         food_recs = [r for r in records if r.record_type == "food"]
@@ -327,6 +359,7 @@ class DomainHandler:
         except Exception:
             return "Не удалось прочитать состав порции для изменения."
 
+        before_json = rec.model_dump_json()
         scaled = payload.scale(0.5)
         rec.calories = scaled.total_calories
         rec.protein = scaled.total_protein
@@ -339,7 +372,8 @@ class DomainHandler:
             action_type="SCALE_HALF",
             entity_type="DiaryRecord",
             entity_id=rec.id,
-            after_json=rec.json_structure,
+            before_json=before_json,
+            after_json=rec.model_dump_json(),
         )
 
         settings = await self.sheets_service.get_settings()
@@ -359,12 +393,13 @@ class DomainHandler:
         if not found:
             return "Запись не найдена или уже была удалена."
         _, rec = found
+        before_json = rec.model_dump_json()
         await self.sheets_service.delete_diary_record(rec.id)
         await self.sheets_service.log_action(
             action_type="DELETE",
             entity_type="DiaryRecord",
             entity_id=rec.id,
-            before_json=rec.json_structure,
+            before_json=before_json,
         )
         return f"Запись удалена 🗑: {rec.name} ({rec.calories:g} ккал)"
 
