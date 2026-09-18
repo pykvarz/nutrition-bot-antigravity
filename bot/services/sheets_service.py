@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 import json
 import uuid
@@ -202,6 +202,24 @@ class SheetsService:
             matching = filtered
 
         return matching[-1] if matching else None
+
+    async def has_food_record_in_last_hours(self, hours: float = 5.0) -> bool:
+        return await asyncio.to_thread(self._sync_has_food_record_in_last_hours, hours)
+
+    def _sync_has_food_record_in_last_hours(self, hours: float = 5.0) -> bool:
+        ws = self._get_spreadsheet().worksheet("Дневник")
+        rows = ws.get_all_values()
+        now = datetime.now(timezone.utc)
+        for row in reversed(rows[1:]):
+            if not row or not row[0]:
+                continue
+            rec = DiaryRecord.from_sheet_row(row)
+            if rec.record_type == "food":
+                rec_time = rec.real_time
+                if rec_time.tzinfo is None:
+                    rec_time = rec_time.replace(tzinfo=timezone.utc)
+                return (now - rec_time) <= timedelta(hours=hours)
+        return False
 
     async def delete_diary_record(self, record_id: str) -> bool:
         return await asyncio.to_thread(self._sync_delete_diary_record, record_id)
@@ -433,4 +451,23 @@ class SheetsService:
                 row_idx = idx + 1
                 ws.update([["True"]], f"H{row_idx}")
                 return True
+        return False
+
+    async def has_recent_action(self, action_type: str, hours: float = 5.0) -> bool:
+        return await asyncio.to_thread(self._sync_has_recent_action, action_type, hours)
+
+    def _sync_has_recent_action(self, action_type: str, hours: float = 5.0) -> bool:
+        ws = self._get_spreadsheet().worksheet("История_действий")
+        rows = ws.get_all_values()
+        now = datetime.now(timezone.utc)
+        for row in reversed(rows[1:]):
+            if len(row) >= 3 and row[2] == action_type:
+                try:
+                    action_time = datetime.fromisoformat(row[1])
+                    if action_time.tzinfo is None:
+                        action_time = action_time.replace(tzinfo=timezone.utc)
+                    if (now - action_time) <= timedelta(hours=hours):
+                        return True
+                except (ValueError, TypeError):
+                    continue
         return False

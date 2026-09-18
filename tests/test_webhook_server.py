@@ -18,6 +18,9 @@ def mock_dependencies():
         "DAY_CUTOFF_HOUR": 4,
     })
     sheets.get_diary_records_for_date = AsyncMock(return_value=[])
+    sheets.has_food_record_in_last_hours = AsyncMock(return_value=False)
+    sheets.has_recent_action = AsyncMock(return_value=False)
+    sheets.log_action = AsyncMock()
 
     gemini = MagicMock()
     gemini.parse_text = AsyncMock()
@@ -126,3 +129,30 @@ async def test_scheduler_jobs_execution(aiohttp_client, mock_dependencies):
     assert resp_rep.status == 200
     data_rep = await resp_rep.json()
     assert data_rep["status"] == "daily_report_executed"
+
+
+@pytest.mark.asyncio
+async def test_scheduler_reminder_skipped_when_recent_food(aiohttp_client, mock_dependencies):
+    mock_dependencies["sheets"].has_food_record_in_last_hours.return_value = True
+
+    app = create_app(
+        sheets_service=mock_dependencies["sheets"],
+        gemini_service=mock_dependencies["gemini"],
+        groq_service=mock_dependencies["groq"],
+        bot=mock_dependencies["bot"],
+        webhook_secret="secret123",
+        allowed_user_id=12345,
+    )
+    client = await aiohttp_client(app)
+
+    headers = {}
+    sched_token = os.getenv("SCHEDULER_SECRET")
+    if sched_token:
+        headers["X-Scheduler-Token"] = sched_token
+
+    resp = await client.post("/jobs/reminder", headers=headers)
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["status"] == "skipped"
+    assert data["reason"] == "recent_food"
+    assert not mock_dependencies["bot"].send_message.called

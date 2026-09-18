@@ -102,19 +102,21 @@ def create_app(
             if token != scheduler_token:
                 return web.Response(status=403, text="Forbidden")
 
+        has_food = await sheets.has_food_record_in_last_hours(5.0)
+        if has_food:
+            return web.json_response({"status": "skipped", "reason": "recent_food"})
+
+        has_recent_reminder = await sheets.has_recent_action("REMINDER_SENT", 5.0)
+        if has_recent_reminder:
+            return web.json_response({"status": "skipped", "reason": "recent_reminder"})
+
         if bot and target_user_id:
-            settings = await sheets.get_settings()
-            food_date = calculate_food_date(
-                cutoff_hour=int(settings.get("DAY_CUTOFF_HOUR", 4)),
-                tz_name=settings.get("TIMEZONE", "Asia/Almaty"),
+            await bot.send_message(
+                chat_id=target_user_id,
+                text="⏰ <b>Напоминание</b>: не забудьте записать приемы пищи за сегодня!",
+                parse_mode="HTML",
             )
-            records = await sheets.get_diary_records_for_date(food_date)
-            if not records:
-                await bot.send_message(
-                    chat_id=target_user_id,
-                    text="⏰ <b>Напоминание</b>: не забудьте записать приемы пищи за сегодня!",
-                    parse_mode="HTML",
-                )
+            await sheets.log_action("REMINDER_SENT", "Scheduler", "reminder_2130")
         return web.json_response({"status": "reminder_executed"})
 
     # 4. Cloud Scheduler: Дневной отчет

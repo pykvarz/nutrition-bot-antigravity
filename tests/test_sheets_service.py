@@ -322,3 +322,46 @@ async def test_find_diary_record_by_filter(mock_sheets_service):
         time_window=(11, 17),
     )
     assert found_aft is None
+
+
+@pytest.mark.asyncio
+async def test_has_food_record_in_last_hours(mock_sheets_service):
+    now = datetime.now(timezone.utc)
+    # 1. No records -> False
+    assert await mock_sheets_service.has_food_record_in_last_hours(5.0) is False
+
+    # 2. Add old record (6 hours ago) -> False
+    old_rec = DiaryRecord(
+        id="rec-old-6h",
+        telegram_update_id=10,
+        real_time=now - timedelta(hours=6),
+        food_date=(now - timedelta(hours=6)).date(),
+        name="Давний обед",
+        calories=400,
+        source="text",
+        json_structure="{}",
+    )
+    await mock_sheets_service.add_diary_record(old_rec)
+    assert await mock_sheets_service.has_food_record_in_last_hours(5.0) is False
+
+    # 3. Add recent record (2 hours ago) -> True
+    recent_rec = DiaryRecord(
+        id="rec-recent-2h",
+        telegram_update_id=11,
+        real_time=now - timedelta(hours=2),
+        food_date=now.date(),
+        name="Свежий ужин",
+        calories=500,
+        source="text",
+        json_structure="{}",
+    )
+    await mock_sheets_service.add_diary_record(recent_rec)
+    assert await mock_sheets_service.has_food_record_in_last_hours(5.0) is True
+
+
+@pytest.mark.asyncio
+async def test_has_recent_action(mock_sheets_service):
+    assert await mock_sheets_service.has_recent_action("REMINDER_SENT", 5.0) is False
+
+    await mock_sheets_service.log_action("REMINDER_SENT", "Scheduler", "reminder_2130")
+    assert await mock_sheets_service.has_recent_action("REMINDER_SENT", 5.0) is True
