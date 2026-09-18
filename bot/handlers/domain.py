@@ -14,6 +14,15 @@ from bot.utils.dates import calculate_food_date
 logger = logging.getLogger(__name__)
 
 
+class DomainResult(str):
+    record_id: Optional[str] = None
+
+    def __new__(cls, content: str, record_id: Optional[str] = None):
+        instance = super().__new__(cls, content)
+        instance.record_id = record_id
+        return instance
+
+
 class DomainHandler:
     def __init__(
         self,
@@ -147,7 +156,7 @@ class DomainHandler:
             today_calories=today_cal,
             target_calories=target_cal,
         )
-        return summary
+        return DomainResult(summary, record_id=record.id)
 
     async def _handle_add_activity(
         self,
@@ -246,7 +255,10 @@ class DomainHandler:
             today_calories=today_cal,
             target_calories=target_cal,
         )
-        return summary.replace("Добавил 👍", "Повторен прием пищи 🔄")
+        return DomainResult(
+            summary.replace("Добавил 👍", "Повторен прием пищи 🔄"),
+            record_id=new_record.id,
+        )
 
     async def _handle_undo(self) -> str:
         last_rec = await self.sheets_service.get_last_diary_record()
@@ -284,3 +296,92 @@ class DomainHandler:
             )
         else:
             return f"👍 Отличный баланс! Осталось {rem_cal:g} ккал и {max(0.0, rem_p):g}г белка."
+
+    async def handle_callback_half(self, record_id: str) -> str:
+        found = await self.sheets_service.get_diary_record_by_id(record_id)
+        if not found:
+            return "Запись не найдена в дневнике."
+        _, rec = found
+        try:
+            data = json.loads(rec.json_structure)
+            payload = FoodPayload.model_validate(data)
+        except Exception:
+            return "Не удалось прочитать состав порции для изменения."
+
+        scaled = payload.scale(0.5)
+        rec.calories = scaled.total_calories
+        rec.protein = scaled.total_protein
+        rec.fat = scaled.total_fat
+        rec.carbs = scaled.total_carbs
+        rec.json_structure = scaled.model_dump_json()
+
+        await self.sheets_service.update_diary_record(rec)
+        await self.sheets_service.log_action(
+            action_type="SCALE_HALF",
+            entity_type="DiaryRecord",
+            entity_id=rec.id,
+            after_json=rec.json_structure,
+        )
+
+        settings = await self.sheets_service.get_settings()
+        today_records = await self.sheets_service.get_diary_records_for_date(rec.food_date)
+        today_cal = round(sum(r.calories for r in today_records if r.record_type == "food"), 1)
+        target_cal = settings.get("TARGET_CALORIES")
+
+        summary = self.nutrition_service.format_food_summary(
+            scaled,
+            today_calories=today_cal,
+            target_calories=target_cal,
+        )
+        return summary.replace("Добавил 👍", "Порция уменьшена на 50% 🍽")
+
+    async def handle_callback_delete(self, record_id: str) -> str:
+        found = await self.sheets_service.get_diary_record_by_id(record_id)
+        if not found:
+            return "Запись не найдена или уже была удалена."
+        _, rec = found
+        await self.sheets_service.delete_diary_record(rec.id)
+        await self.sheets_service.log_action(
+            action_type="DELETE",
+            entity_type="DiaryRecord",
+            entity_id=rec.id,
+            before_json=rec.json_structure,
+        )
+        return f"Запись удалена 🗑: {rec.name} ({rec.calories:g} ккал)"
+
+    async def handle_callback_template(self, record_id: str) -> str:
+        found = await self.sheets_service.get_diary_record_by_id(record_id)
+        if not found:
+            return "Запись не найдена."
+        _, rec = found
+        await self.sheets_service.add_template(
+            name=rec.name,
+            calories=rec.calories,
+            protein=rec.protein,
+            fat=rec.fat,
+            carbs=rec.carbs,
+            json_structure=rec.json_structure,
+            notes=f"Сохранено из записи от {rec.food_date}",
+        )
+        await self.sheets_service.log_action(
+            action_type="ADD_TEMPLATE",
+            entity_type="Template",
+            entity_id=rec.name,
+            after_json=rec.json_structure,
+        )
+        return f"Блюдо «{rec.name}» сохранено в шаблоны ⭐ ({rec.calories:g} ккал)"
+
+    async def handle_callback_edit(self, record_id: str) -> str:
+        found = await self.sheets_service.get_diary_record_by_id(record_id)
+        if not found:
+            return "Запись не найдена."
+        _, rec = found
+        state = await self.sheets_service.get_state()
+        state.pending_action = "EDIT_RECORD"
+        state.target_record_id = rec.id
+        state.updated_at = datetime.now(timezone.utc)
+        await self.sheets_service.set_state(state)
+        return (
+            f"✏️ <b>Исправление записи:</b> «{rec.name}»\n"
+            f"Напишите или надиктуйте голосом, что изменить (например: «курицы было 300 г»):"
+        )

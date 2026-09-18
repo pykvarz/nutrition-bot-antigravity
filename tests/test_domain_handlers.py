@@ -163,3 +163,60 @@ async def test_handle_repeat_half_portion(mock_sheets):
     assert mock_sheets.add_diary_record.called
     added: DiaryRecord = mock_sheets.add_diary_record.call_args[0][0]
     assert added.calories == 110
+
+
+@pytest.mark.asyncio
+async def test_callback_actions(mock_sheets):
+    nutrition_service = NutritionService()
+    handler = DomainHandler(sheets_service=mock_sheets, nutrition_service=nutrition_service)
+
+    payload = FoodPayload(
+        items=[FoodItem(name="Овсянка", amount=100, unit="g", calories=360, protein=12, fat=6, carbs=65)],
+        portion_multiplier=1.0,
+    )
+    rec = DiaryRecord(
+        id="rec-buttons-1",
+        telegram_update_id=206,
+        real_time=datetime.now(timezone.utc),
+        food_date=date(2026, 9, 18),
+        name="Овсянка",
+        calories=360,
+        protein=12,
+        fat=6,
+        carbs=65,
+        source="text",
+        json_structure=payload.model_dump_json(),
+    )
+    mock_sheets.get_diary_record_by_id = AsyncMock(return_value=(2, rec))
+    mock_sheets.update_diary_record = AsyncMock(return_value=True)
+    mock_sheets.add_template = AsyncMock()
+    mock_sheets.get_settings = AsyncMock(return_value={"TARGET_CALORIES": 2000})
+    mock_sheets.get_diary_records_for_date = AsyncMock(return_value=[rec])
+    mock_sheets.get_state = AsyncMock(return_value=BotState())
+    mock_sheets.set_state = AsyncMock()
+
+    # 1. Test 50% button callback
+    res_half = await handler.handle_callback_half("rec-buttons-1")
+    assert "50%" in res_half
+    assert "180" in res_half  # 360 / 2 = 180
+    assert mock_sheets.update_diary_record.called
+
+    # 2. Test Delete button callback
+    res_del = await handler.handle_callback_delete("rec-buttons-1")
+    assert "удалена" in res_del.lower() or "отменена" in res_del.lower()
+    assert mock_sheets.delete_diary_record.called
+
+    # 3. Test Template button callback
+    res_tmpl = await handler.handle_callback_template("rec-buttons-1")
+    assert "шаблон" in res_tmpl.lower()
+    assert mock_sheets.add_template.called
+
+    # 4. Test Edit button callback
+    mock_sheets.get_state.return_value = BotState()
+    mock_sheets.set_state = AsyncMock()
+    res_edit = await handler.handle_callback_edit("rec-buttons-1")
+    assert "исправ" in res_edit.lower()
+    assert mock_sheets.set_state.called
+    saved_state = mock_sheets.set_state.call_args[0][0]
+    assert saved_state.pending_action == "EDIT_RECORD"
+    assert saved_state.target_record_id == "rec-buttons-1"

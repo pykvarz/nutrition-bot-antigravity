@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from aiogram import Router, F, Bot
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 
 from bot.models.intents import ParsedIntent, IntentType
@@ -13,6 +13,21 @@ from bot.services.groq_service import GroqService
 from bot.handlers.domain import DomainHandler
 
 logger = logging.getLogger(__name__)
+
+
+def get_food_actions_keyboard(record_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✏️ Исправить", callback_data=f"edit:{record_id}"),
+                InlineKeyboardButton(text="🍽 50%", callback_data=f"half:{record_id}"),
+            ],
+            [
+                InlineKeyboardButton(text="🗑 Удалить", callback_data=f"del:{record_id}"),
+                InlineKeyboardButton(text="⭐ В шаблон", callback_data=f"tmpl:{record_id}"),
+            ],
+        ]
+    )
 
 
 def create_bot_router(
@@ -149,7 +164,8 @@ def create_bot_router(
             message_id=message.message_id,
             source="voice",
         )
-        await message.answer(reply, parse_mode="HTML")
+        kb = get_food_actions_keyboard(reply.record_id) if getattr(reply, "record_id", None) else None
+        await message.answer(reply, parse_mode="HTML", reply_markup=kb)
 
     @router.message(F.photo)
     async def handle_photo(message: Message, bot: Bot):
@@ -175,7 +191,8 @@ def create_bot_router(
             message_id=message.message_id,
             source="photo",
         )
-        await message.answer(reply, parse_mode="HTML")
+        kb = get_food_actions_keyboard(reply.record_id) if getattr(reply, "record_id", None) else None
+        await message.answer(reply, parse_mode="HTML", reply_markup=kb)
 
     @router.message(F.text)
     async def handle_text(message: Message):
@@ -189,6 +206,67 @@ def create_bot_router(
             message_id=message.message_id,
             source="text",
         )
-        await message.answer(reply, parse_mode="HTML")
+        kb = get_food_actions_keyboard(reply.record_id) if getattr(reply, "record_id", None) else None
+        await message.answer(reply, parse_mode="HTML", reply_markup=kb)
+
+    # -------------------------------------------------------------
+    # Inline Callback Handlers
+    # -------------------------------------------------------------
+    @router.callback_query(F.data.startswith("half:"))
+    async def on_half_clicked(callback: CallbackQuery):
+        if not callback.from_user or (target_user_id and callback.from_user.id != target_user_id):
+            await callback.answer("⛔ Доступ ограничен.", show_alert=True)
+            return
+        parts = (callback.data or "").split(":", 1)
+        if len(parts) < 2:
+            return
+        record_id = parts[1]
+        text = await domain_handler.handle_callback_half(record_id)
+        await callback.answer("Порция уменьшена на 50% 🍽")
+        if callback.message:
+            kb = get_food_actions_keyboard(record_id)
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+
+    @router.callback_query(F.data.startswith("del:"))
+    async def on_del_clicked(callback: CallbackQuery):
+        if not callback.from_user or (target_user_id and callback.from_user.id != target_user_id):
+            await callback.answer("⛔ Доступ ограничен.", show_alert=True)
+            return
+        parts = (callback.data or "").split(":", 1)
+        if len(parts) < 2:
+            return
+        record_id = parts[1]
+        text = await domain_handler.handle_callback_delete(record_id)
+        await callback.answer("Удалено 🗑")
+        if callback.message:
+            await callback.message.edit_text(text, parse_mode="HTML")
+
+    @router.callback_query(F.data.startswith("tmpl:"))
+    async def on_tmpl_clicked(callback: CallbackQuery):
+        if not callback.from_user or (target_user_id and callback.from_user.id != target_user_id):
+            await callback.answer("⛔ Доступ ограничен.", show_alert=True)
+            return
+        parts = (callback.data or "").split(":", 1)
+        if len(parts) < 2:
+            return
+        record_id = parts[1]
+        text = await domain_handler.handle_callback_template(record_id)
+        await callback.answer("Сохранено в шаблоны ⭐")
+        if callback.message:
+            await callback.message.answer(text, parse_mode="HTML")
+
+    @router.callback_query(F.data.startswith("edit:"))
+    async def on_edit_clicked(callback: CallbackQuery):
+        if not callback.from_user or (target_user_id and callback.from_user.id != target_user_id):
+            await callback.answer("⛔ Доступ ограничен.", show_alert=True)
+            return
+        parts = (callback.data or "").split(":", 1)
+        if len(parts) < 2:
+            return
+        record_id = parts[1]
+        text = await domain_handler.handle_callback_edit(record_id)
+        await callback.answer()
+        if callback.message:
+            await callback.message.answer(text, parse_mode="HTML")
 
     return router

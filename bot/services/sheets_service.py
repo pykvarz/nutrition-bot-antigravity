@@ -177,6 +177,18 @@ class SheetsService:
         ws.delete_rows(row_idx)
         return True
 
+    async def update_diary_record(self, record: DiaryRecord) -> bool:
+        return await asyncio.to_thread(self._sync_update_diary_record, record)
+
+    def _sync_update_diary_record(self, record: DiaryRecord) -> bool:
+        found = self._sync_get_diary_record_by_id(record.id)
+        if not found:
+            return False
+        row_idx, _ = found
+        ws = self._get_spreadsheet().worksheet("Дневник")
+        ws.update([record.to_sheet_row()], f"A{row_idx}:O{row_idx}")
+        return True
+
     # -------------------------------------------------------------
     # 3. Настройки (Settings)
     # -------------------------------------------------------------
