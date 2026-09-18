@@ -273,3 +273,52 @@ async def test_undoable_actions_workflow(mock_sheets_service):
 
     action_after = await mock_sheets_service.get_last_undoable_action()
     assert action_after is None
+
+
+@pytest.mark.asyncio
+async def test_find_diary_record_by_filter(mock_sheets_service):
+    rec_morning = DiaryRecord(
+        id="rec-morn",
+        telegram_update_id=1,
+        real_time=datetime(2026, 9, 17, 9, 0),
+        food_date=date(2026, 9, 17),
+        name="Каша овсяная",
+        calories=300,
+        source="text",
+        json_structure="{}",
+    )
+    rec_evening = DiaryRecord(
+        id="rec-eve",
+        telegram_update_id=2,
+        real_time=datetime(2026, 9, 17, 19, 30),
+        food_date=date(2026, 9, 17),
+        name="Стейк с овощами",
+        calories=650,
+        source="text",
+        json_structure="{}",
+    )
+    await mock_sheets_service.add_diary_record(rec_morning)
+    await mock_sheets_service.add_diary_record(rec_evening)
+
+    # Filter morning 5-11
+    found_morn = await mock_sheets_service.find_diary_record_by_filter(
+        target_date=date(2026, 9, 17),
+        time_window=(5, 11),
+    )
+    assert found_morn is not None
+    assert found_morn.name == "Каша овсяная"
+
+    # Filter evening 17-23
+    found_eve = await mock_sheets_service.find_diary_record_by_filter(
+        target_date=date(2026, 9, 17),
+        time_window=(17, 23),
+    )
+    assert found_eve is not None
+    assert found_eve.name == "Стейк с овощами"
+
+    # Filter afternoon 11-17 (should be None)
+    found_aft = await mock_sheets_service.find_diary_record_by_filter(
+        target_date=date(2026, 9, 17),
+        time_window=(11, 17),
+    )
+    assert found_aft is None

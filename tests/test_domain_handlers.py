@@ -335,3 +335,67 @@ async def test_handle_settings_update(mock_sheets):
     assert "160" in res
     assert mock_sheets.update_settings.called
     assert mock_sheets.log_action.called
+
+
+@pytest.mark.asyncio
+async def test_handle_repeat_yesterday_evening(mock_sheets):
+    nutrition_service = NutritionService()
+    payload = FoodPayload(
+        items=[FoodItem(name="Стейк", amount=250, unit="g", calories=550, protein=50, fat=35, carbs=0)],
+        portion_multiplier=1.0,
+    )
+    yest_rec = DiaryRecord(
+        id="rec-yest-eve",
+        telegram_update_id=123,
+        real_time=datetime(2026, 9, 17, 20, 0),
+        food_date=date(2026, 9, 17),
+        name="Стейк",
+        calories=550,
+        protein=50,
+        fat=35,
+        carbs=0,
+        source="text",
+        json_structure=payload.model_dump_json(),
+    )
+    mock_sheets.find_diary_record_by_filter = AsyncMock(return_value=yest_rec)
+    mock_sheets.get_settings = AsyncMock(return_value={"TARGET_CALORIES": 2000})
+    mock_sheets.get_diary_records_for_date = AsyncMock(return_value=[yest_rec])
+    mock_sheets.add_diary_record = AsyncMock()
+    mock_sheets.log_action = AsyncMock()
+
+    handler = DomainHandler(sheets_service=mock_sheets, nutrition_service=nutrition_service)
+    intent = ParsedIntent(
+        intent=IntentType.REPEAT,
+        raw_text="съел то же, что вчера вечером",
+        details={
+            "target_date_offset": -1,
+            "time_of_day": "evening",
+            "query_label": "вчерашний ужин",
+        },
+    )
+
+    res = await handler.process_intent(intent, update_id=305)
+    assert "Повторен прием пищи" in res
+    assert "Стейк" in res
+    assert mock_sheets.find_diary_record_by_filter.called
+    assert mock_sheets.add_diary_record.called
+
+
+@pytest.mark.asyncio
+async def test_handle_repeat_not_found(mock_sheets):
+    nutrition_service = NutritionService()
+    mock_sheets.find_diary_record_by_filter = AsyncMock(return_value=None)
+
+    handler = DomainHandler(sheets_service=mock_sheets, nutrition_service=nutrition_service)
+    intent = ParsedIntent(
+        intent=IntentType.REPEAT,
+        raw_text="съел то же, что вчера вечером",
+        details={
+            "target_date_offset": -1,
+            "time_of_day": "evening",
+            "query_label": "вчерашний ужин",
+        },
+    )
+
+    res = await handler.process_intent(intent, update_id=306)
+    assert "Не удалось найти вчерашний ужин" in res

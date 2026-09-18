@@ -177,6 +177,32 @@ class SheetsService:
                 records.append(DiaryRecord.from_sheet_row(row))
         return records
 
+    async def find_diary_record_by_filter(
+        self,
+        target_date: date,
+        time_window: Optional[Tuple[int, int]] = None,
+        record_type: str = "food",
+    ) -> Optional[DiaryRecord]:
+        return await asyncio.to_thread(self._sync_find_diary_record_by_filter, target_date, time_window, record_type)
+
+    def _sync_find_diary_record_by_filter(
+        self,
+        target_date: date,
+        time_window: Optional[Tuple[int, int]] = None,
+        record_type: str = "food",
+    ) -> Optional[DiaryRecord]:
+        records = self._sync_get_diary_records_for_date(target_date)
+        matching = [r for r in records if r.record_type == record_type]
+        if time_window:
+            start_h, end_h = time_window
+            filtered = []
+            for r in matching:
+                if start_h <= r.real_time.hour < end_h:
+                    filtered.append(r)
+            matching = filtered
+
+        return matching[-1] if matching else None
+
     async def delete_diary_record(self, record_id: str) -> bool:
         return await asyncio.to_thread(self._sync_delete_diary_record, record_id)
 

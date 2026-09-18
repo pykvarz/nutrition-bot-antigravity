@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 import json
 import uuid
@@ -224,9 +224,33 @@ class DomainHandler:
         now: datetime,
         food_date: Any,
     ) -> str:
-        last_rec = await self.sheets_service.get_last_diary_record()
-        if not last_rec or last_rec.record_type != "food":
-            return "Нет предыдущих приемов пищи для повторения."
+        offset = intent.details.get("target_date_offset")
+        time_of_day = intent.details.get("time_of_day")
+
+        if offset is not None or time_of_day:
+            target_date = food_date + timedelta(days=int(offset or 0))
+            time_window = None
+            if time_of_day == "morning":
+                time_window = (5, 11)
+            elif time_of_day == "afternoon":
+                time_window = (11, 17)
+            elif time_of_day == "evening":
+                time_window = (17, 23)
+
+            last_rec = await self.sheets_service.find_diary_record_by_filter(
+                target_date=target_date,
+                time_window=time_window,
+                record_type="food",
+            )
+            if not last_rec:
+                label = intent.details.get("query_label") or (
+                    "вчерашний ужин" if time_of_day == "evening" else "прием пищи за указанное время"
+                )
+                return f"Не удалось найти {label}."
+        else:
+            last_rec = await self.sheets_service.get_last_diary_record()
+            if not last_rec or last_rec.record_type != "food":
+                return "Нет предыдущих приемов пищи для повторения."
 
         try:
             data = json.loads(last_rec.json_structure)
