@@ -54,6 +54,17 @@ class DiaryRecord(BaseModel):
         def get_val(index: int, default: Any = ""):
             return row[index] if index < len(row) else default
 
+        def parse_float(val: Any) -> float:
+            if val is None or val == "":
+                return 0.0
+            if isinstance(val, (int, float)):
+                return float(val)
+            s = str(val).strip().replace(",", ".")
+            try:
+                return float(s)
+            except ValueError:
+                return 0.0
+
         real_time_val = get_val(2)
         if isinstance(real_time_val, str):
             real_time = datetime.fromisoformat(real_time_val)
@@ -75,10 +86,10 @@ class DiaryRecord(BaseModel):
             real_time=real_time,
             food_date=food_date,
             name=str(get_val(4)),
-            calories=float(get_val(5) or 0.0),
-            protein=float(get_val(6) or 0.0),
-            fat=float(get_val(7) or 0.0),
-            carbs=float(get_val(8) or 0.0),
+            calories=parse_float(get_val(5)),
+            protein=parse_float(get_val(6)),
+            fat=parse_float(get_val(7)),
+            carbs=parse_float(get_val(8)),
             source=str(get_val(9)),
             record_type=str(get_val(10) or "food"),
             json_structure=str(get_val(11)),

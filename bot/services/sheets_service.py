@@ -9,6 +9,18 @@ from bot.models.diary import DiaryRecord
 from bot.models.state import BotState
 
 
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    if val is None or val == "":
+        return default
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip().replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return default
+
+
 class SheetsService:
     def __init__(
         self,
@@ -185,7 +197,7 @@ class SheetsService:
         for row in rows[1:]:
             if len(row) >= 2 and row[0]:
                 k = row[0].strip()
-                v = row[1].strip()
+                v = str(row[1]).strip().replace(",", ".")
                 if k in ("TARGET_CALORIES", "TARGET_PROTEIN", "TARGET_FAT", "TARGET_CARBS"):
                     try:
                         settings[k] = float(v)
@@ -193,7 +205,7 @@ class SheetsService:
                         pass
                 elif k == "DAY_CUTOFF_HOUR":
                     try:
-                        settings[k] = int(v)
+                        settings[k] = int(float(v))
                     except ValueError:
                         pass
                 elif k == "TIMEZONE":
@@ -215,10 +227,10 @@ class SheetsService:
             if row and row[0]:
                 templates.append({
                     "name": row[0],
-                    "calories": float(row[1] or 0),
-                    "protein": float(row[2] or 0),
-                    "fat": float(row[3] or 0),
-                    "carbs": float(row[4] or 0),
+                    "calories": _safe_float(row[1] if len(row) > 1 else 0),
+                    "protein": _safe_float(row[2] if len(row) > 2 else 0),
+                    "fat": _safe_float(row[3] if len(row) > 3 else 0),
+                    "carbs": _safe_float(row[4] if len(row) > 4 else 0),
                     "json_structure": row[5] if len(row) > 5 else "{}",
                     "notes": row[6] if len(row) > 6 else "",
                 })
@@ -265,12 +277,12 @@ class SheetsService:
                     "id": row[0],
                     "name": row[1] if len(row) > 1 else "",
                     "created_at": row[2] if len(row) > 2 else "",
-                    "portions": float(row[3] or 1) if len(row) > 3 else 1,
-                    "calories_total": float(row[4] or 0) if len(row) > 4 else 0,
-                    "calories_per_portion": float(row[8] or 0) if len(row) > 8 else 0,
-                    "protein_per_portion": float(row[9] or 0) if len(row) > 9 else 0,
-                    "fat_per_portion": float(row[10] or 0) if len(row) > 10 else 0,
-                    "carbs_per_portion": float(row[11] or 0) if len(row) > 11 else 0,
+                    "portions": _safe_float(row[3] if len(row) > 3 else 1, default=1.0),
+                    "calories_total": _safe_float(row[4] if len(row) > 4 else 0),
+                    "calories_per_portion": _safe_float(row[8] if len(row) > 8 else 0),
+                    "protein_per_portion": _safe_float(row[9] if len(row) > 9 else 0),
+                    "fat_per_portion": _safe_float(row[10] if len(row) > 10 else 0),
+                    "carbs_per_portion": _safe_float(row[11] if len(row) > 11 else 0),
                     "json_structure": row[12] if len(row) > 12 else "{}",
                 })
         return recipes

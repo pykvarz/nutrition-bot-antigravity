@@ -71,6 +71,20 @@ def test_diary_record_to_sheet_row():
     assert row[5] == 78
 
 
+def test_diary_record_from_sheet_row_with_commas():
+    # Google Sheets with Russian/European locale returns decimals with commas like '3,6'
+    row = [
+        "rec-123", "1", "2026-09-18T10:00:00", "2026-09-18",
+        "Творог", "240,5", "36,2", "10,1", "3,6", "text", "food",
+        "{}", "съел творог", "1", ""
+    ]
+    record = DiaryRecord.from_sheet_row(row)
+    assert record.calories == 240.5
+    assert record.protein == 36.2
+    assert record.fat == 10.1
+    assert record.carbs == 3.6
+
+
 def test_bot_state_ttl():
     now = datetime.now(timezone.utc)
     fresh_state = BotState(
