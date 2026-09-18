@@ -1,6 +1,5 @@
 import pytest
 from datetime import datetime, date, timezone
-from unittest.mock import MagicMock, AsyncMock, patch
 
 from bot.models.diary import DiaryRecord
 from bot.models.state import BotState

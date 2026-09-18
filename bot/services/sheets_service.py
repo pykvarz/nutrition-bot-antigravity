@@ -45,7 +45,8 @@ class SheetsService:
             creds = Credentials.from_service_account_info(cred_dict, scopes=scopes)
         else:
             raise ValueError(
-                "Google Service Account credentials not provided! Set GOOGLE_SERVICE_ACCOUNT_FILE or GOOGLE_SERVICE_ACCOUNT_JSON."
+                "Google Service Account credentials not provided! "
+                "Set GOOGLE_SERVICE_ACCOUNT_FILE or GOOGLE_SERVICE_ACCOUNT_JSON."
             )
 
         client = gspread.authorize(creds)

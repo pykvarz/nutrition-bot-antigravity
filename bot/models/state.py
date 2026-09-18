@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 import json
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class BotState(BaseModel):

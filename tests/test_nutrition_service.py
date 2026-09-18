@@ -1,4 +1,3 @@
-import pytest
 from datetime import datetime, date
 
 from bot.models.food import FoodItem, FoodPayload

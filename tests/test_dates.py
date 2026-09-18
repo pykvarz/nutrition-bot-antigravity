@@ -1,6 +1,5 @@
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
-import pytest
 
 from bot.utils.dates import calculate_food_date
 

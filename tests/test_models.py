@@ -1,9 +1,6 @@
-import pytest
 from datetime import datetime, date, timezone, timedelta
-import json
 
 from bot.models.food import FoodItem, FoodPayload
-from bot.models.activity import ActivityItem
 from bot.models.diary import DiaryRecord
 from bot.models.intents import IntentType, ParsedIntent
 from bot.models.state import BotState

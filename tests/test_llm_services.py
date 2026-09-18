@@ -1,16 +1,9 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
-from bot.models.intents import IntentType, ParsedIntent
-from bot.models.food import FoodPayload, FoodItem
+from bot.models.intents import IntentType
 from bot.services.gemini_service import GeminiService
 from bot.services.groq_service import GroqService
-
-
-@pytest.fixture
-def mock_gemini_client():
-    client = MagicMock()
-    return client
 
 
 @pytest.mark.asyncio
@@ -91,3 +84,4 @@ async def test_groq_transcribe_audio():
     with patch.object(service, "_sync_transcribe", return_value="Съел банан и яблоко") as mock_sync:
         text = await service.transcribe_audio(b"fake_audio_bytes")
         assert text == "Съел банан и яблоко"
+        assert mock_sync.called
