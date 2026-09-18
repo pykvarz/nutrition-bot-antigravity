@@ -1,3 +1,4 @@
+import os
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
@@ -108,15 +109,20 @@ async def test_scheduler_jobs_execution(aiohttp_client, mock_dependencies):
     )
     client = await aiohttp_client(app)
 
+    headers = {}
+    sched_token = os.getenv("SCHEDULER_SECRET")
+    if sched_token:
+        headers["X-Scheduler-Token"] = sched_token
+
     # 1. Reminder job
-    resp_rem = await client.post("/jobs/reminder")
+    resp_rem = await client.post("/jobs/reminder", headers=headers)
     assert resp_rem.status == 200
     data_rem = await resp_rem.json()
     assert data_rem["status"] == "reminder_executed"
     assert mock_dependencies["bot"].send_message.called
 
     # 2. Daily report job
-    resp_rep = await client.post("/jobs/daily-report")
+    resp_rep = await client.post("/jobs/daily-report", headers=headers)
     assert resp_rep.status == 200
     data_rep = await resp_rep.json()
     assert data_rep["status"] == "daily_report_executed"

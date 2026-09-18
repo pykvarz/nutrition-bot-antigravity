@@ -63,10 +63,12 @@ class GeminiService:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gemini-3.5-flash-lite",
+        fallback_models: Optional[List[str]] = None,
     ):
         self._api_key = api_key or os.getenv("GEMINI_API_KEY")
         self._model_name = model_name
+        self._fallback_models = fallback_models or ["gemini-3.5-flash-lite", "gemini-3.5-flash"]
         self._client = None
 
     def _get_client(self):
@@ -82,7 +84,7 @@ class GeminiService:
         mime_type: Optional[str] = None,
     ) -> str:
         """
-        Вызов API Gemini в отдельном потоке.
+        Вызов API Gemini в отдельном потоке с fallback на резервные модели при 503/ошибках.
         """
         return await asyncio.to_thread(self._sync_generate_content, prompt, image_bytes, mime_type)
 
@@ -113,12 +115,23 @@ class GeminiService:
             response_mime_type="application/json",
         )
 
-        response = client.models.generate_content(
-            model=self._model_name,
-            contents=contents,
-            config=config,
-        )
-        return response.text or ""
+        models_to_try = [self._model_name] + [m for m in self._fallback_models if m != self._model_name]
+        last_exc = None
+        for m in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=m,
+                    contents=contents,
+                    config=config,
+                )
+                return response.text or ""
+            except Exception as e:
+                logger.warning(f"Model {m} failed with error: {e}. Trying fallback...")
+                last_exc = e
+
+        if last_exc:
+            raise last_exc
+        return ""
 
     async def parse_text(
         self,
