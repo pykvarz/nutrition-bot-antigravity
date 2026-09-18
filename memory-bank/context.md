@@ -35,6 +35,14 @@
 - Сборка: Docker-образ для Cloud Run (через gcloud)
 
 ## Progress
-- Прочитана документация из папки `docs/` (`brief.md`, `data.md`, `intends.md`, `INVARIANTS.md`, `FUNCTIONALITY.md`, `ACCEPTANCE.md`).
-- Сформирована структура `memory-bank/context.md`.
-- Ожидается создание плана реализации (Implementation Plan) и начало настройки репозитория (Git/GitHub, scaffolding, .env).
+- Прочитана и проанализирована вся проектная документация в папке `docs/`.
+- Инициализирован Git репозиторий, создан приватный репозиторий на GitHub: `https://github.com/pykvarz/nutrition-bot-antigravity`.
+- Настроена изолированная среда разработки `venv`, установлены зависимости (`requirements.txt`, `requirements-dev.txt`).
+- Реализованы базовые Pydantic-модели (`FoodItem`, `FoodPayload`, `ActivityItem`, `DiaryRecord`, `BotState`, `ParsedIntent`, `IntentType`).
+- Реализован `NutritionService` для расчета, суммирования и масштабирования порций КБЖУ, форматирования сводок за день и приемов пищи.
+- Реализована функция `calculate_food_date(dt, cutoff_hour, tz_name)` с поддержкой таймзоны (Asia/Almaty) и отсечки ночного времени.
+- Реализован `SheetsService` со всеми асинхронными обертками (`asyncio.to_thread`), методами работы со всеми листами таблицы и идемпотентностью `update_id`.
+- Реализованы LLM-сервисы: `GeminiService` (структурированный JSON, retry, multimodal) и `GroqService` (Whisper-large-v3).
+- Реализованы DomainHandler и aiogram роутер с поддержкой текста, голосовых, фото и команд.
+- Реализован stateless aiohttp сервер (`bot/main.py`) с валидацией секретного токена webhook, проверкой идемпотентности и эндпоинтами Cloud Scheduler (`/jobs/reminder`, `/jobs/daily-report`).
+- Написано 34 модульных и интеграционных теста (`pytest`), 100% тестов проходят, линтер `flake8` проходит без замечаний.
