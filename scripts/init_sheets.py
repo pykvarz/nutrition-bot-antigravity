@@ -69,23 +69,23 @@ def init_sheets():
 
     for title, headers in sheets_config.items():
         if title not in existing_worksheets:
-            print(f"➕ Создаю лист '{title}'...")
+            print(f"[+] Sozdanie lista '{title}'...")
             ws = spreadsheet.add_worksheet(title=title, rows=100, cols=len(headers) + 2)
             ws.append_row(headers)
         else:
             ws = existing_worksheets[title]
             all_vals = ws.get_all_values()
             if not all_vals:
-                print(f"📝 Заполняю заголовки для листа '{title}'...")
+                print(f"[*] Zapolnenie zagolovkov dlya '{title}'...")
                 ws.append_row(headers)
             else:
-                print(f"✓ Лист '{title}' уже существует.")
+                print(f"[OK] List '{title}' uzhe sushestvuet.")
 
     # Заполнение дефолтных настроек, если пусто
     ws_settings = spreadsheet.worksheet("Настройки")
     settings_vals = ws_settings.get_all_values()
     if len(settings_vals) <= 1:
-        print("⚙️ Заполняю базовые настройки...")
+        print("[*] Zapolnenie bazovyh nastroek...")
         default_settings = [
             ["TARGET_CALORIES", "2000"],
             ["TARGET_PROTEIN", "140"],
@@ -97,7 +97,7 @@ def init_sheets():
         for row in default_settings:
             ws_settings.append_row(row)
 
-    print("🎉 Google Sheets успешно инициализирована со всеми листами и заголовками!")
+    print("[SUCCESS] Google Sheets uspeshno inicializirovana!")
 
 
 if __name__ == "__main__":
