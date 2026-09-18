@@ -137,8 +137,17 @@ class DomainHandler:
             entity_id=record.id,
             after_json=record.json_structure,
         )
-        summary = self.nutrition_service.format_food_summary(payload)
-        return f"✅ <b>Записано</b>:\n{summary}"
+        today_records = await self.sheets_service.get_diary_records_for_date(food_date)
+        today_cal = round(sum(r.calories for r in today_records if r.record_type == "food"), 1)
+        settings = await self.sheets_service.get_settings()
+        target_cal = settings.get("TARGET_CALORIES")
+
+        summary = self.nutrition_service.format_food_summary(
+            payload,
+            today_calories=today_cal,
+            target_calories=target_cal,
+        )
+        return summary
 
     async def _handle_add_activity(
         self,
@@ -227,8 +236,17 @@ class DomainHandler:
             entity_id=new_record.id,
             after_json=new_record.json_structure,
         )
-        summary = self.nutrition_service.format_food_summary(payload)
-        return f"🔄 <b>Повторен прием пищи</b>:\n{summary}"
+        today_records = await self.sheets_service.get_diary_records_for_date(food_date)
+        today_cal = round(sum(r.calories for r in today_records if r.record_type == "food"), 1)
+        settings = await self.sheets_service.get_settings()
+        target_cal = settings.get("TARGET_CALORIES")
+
+        summary = self.nutrition_service.format_food_summary(
+            payload,
+            today_calories=today_cal,
+            target_calories=target_cal,
+        )
+        return summary.replace("Добавил 👍", "Повторен прием пищи 🔄")
 
     async def _handle_undo(self) -> str:
         last_rec = await self.sheets_service.get_last_diary_record()

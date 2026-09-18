@@ -24,27 +24,40 @@ class NutritionService:
             source=item.source,
         )
 
-    def format_food_summary(self, payload: FoodPayload) -> str:
+    def format_food_summary(
+        self,
+        payload: FoodPayload,
+        today_calories: Optional[float] = None,
+        target_calories: Optional[float] = None,
+    ) -> str:
         """
-        Форматирует структурированный прием пищи в красивое текстовое сообщение.
+        Форматирует структурированный прием пищи в лаконичное сообщение:
+        Добавил 👍
+
+        Курица 500 г
+        Чечевица 200 г
+
+        ≈ 950 ккал
+        Б: 170 | Ж: 20 | У: 40
+
+        Сегодня: 950 / 1900 ккал
         """
-        lines = []
+        lines = ["Добавил 👍\n"]
         for item in payload.effective_items:
-            lines.append(
-                f"• {item.name} ({item.amount:g}{item.unit}) — {item.calories:g} ккал "
-                f"(Б: {item.protein:g}, Ж: {item.fat:g}, У: {item.carbs:g})"
-            )
+            unit_str = "г" if item.unit == "g" else ("мл" if item.unit == "ml" else item.unit)
+            lines.append(f"{item.name} {item.amount:g} {unit_str}")
 
-        summary = "\n".join(lines)
-        if len(payload.items) > 1 or payload.portion_multiplier != 1.0:
-            summary += (
-                f"\n\n<b>Итого</b>: {payload.total_calories:g} ккал "
-                f"(Б: {payload.total_protein:g}, Ж: {payload.total_fat:g}, У: {payload.total_carbs:g})"
-            )
-            if payload.portion_multiplier != 1.0:
-                summary += f" [порция: {payload.portion_multiplier:g}x]"
+        portion_note = f" (порция {payload.portion_multiplier:g}x)" if payload.portion_multiplier != 1.0 else ""
+        lines.append(f"\n≈ {payload.total_calories:g} ккал{portion_note}")
+        lines.append(f"Б: {payload.total_protein:g} | Ж: {payload.total_fat:g} | У: {payload.total_carbs:g}")
 
-        return summary
+        if today_calories is not None:
+            if target_calories and target_calories > 0:
+                lines.append(f"\nСегодня: {today_calories:g} / {target_calories:g} ккал")
+            else:
+                lines.append(f"\nСегодня: {today_calories:g} ккал")
+
+        return "\n".join(lines)
 
     def format_daily_summary(
         self,
