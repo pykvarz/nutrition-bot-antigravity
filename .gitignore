@@ -23,3 +23,13 @@ Thumbs.db
 .idea/
 .vscode/
 *.sw?
+
+# Tests & caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets & Service Accounts
+*.json
+!package*.json
+!tsconfig*.json

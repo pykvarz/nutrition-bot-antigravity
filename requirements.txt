@@ -1,0 +1,6 @@
+aiohttp>=3.9.0
+aiogram>=3.10.0
+pydantic>=2.7.0
+gspread>=6.1.0
+google-genai>=0.3.0
+groq>=0.5.0
