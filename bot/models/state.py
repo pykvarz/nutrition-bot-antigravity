@@ -25,6 +25,17 @@ class BotState(BaseModel):
             upd = upd.replace(tzinfo=timezone.utc)
         return (now - upd) > timedelta(minutes=ttl_minutes)
 
+    def clear_pending(self) -> None:
+        """
+        Сбрасывает текущее ожидающее действие и целевые идентификаторы.
+        """
+        self.pending_action = None
+        self.target_record_id = None
+        self.target_template_id = None
+        self.target_recipe_id = None
+        self.pending_payload = None
+        self.updated_at = datetime.now(timezone.utc)
+
     def to_kv_rows(self) -> list[list[Any]]:
         """
         Преобразует состояние в строки Ключ | Значение | Updated_At для листа 'Состояние'.

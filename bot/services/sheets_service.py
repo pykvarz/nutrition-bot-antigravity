@@ -78,7 +78,19 @@ class SheetsService:
     def _sync_get_state(self) -> BotState:
         ws = self._get_spreadsheet().worksheet("Состояние")
         rows = ws.get_all_values()
-        return BotState.from_kv_rows(rows[1:] if len(rows) > 1 else [])
+        state = BotState.from_kv_rows(rows[1:] if len(rows) > 1 else [])
+        if state.pending_action and state.is_expired(ttl_minutes=30):
+            state.clear_pending()
+            self._sync_set_state(state)
+        return state
+
+    async def clear_state(self) -> None:
+        await asyncio.to_thread(self._sync_clear_state)
+
+    def _sync_clear_state(self) -> None:
+        state = self._sync_get_state()
+        state.clear_pending()
+        self._sync_set_state(state)
 
     async def set_state(self, state: BotState) -> None:
         await asyncio.to_thread(self._sync_set_state, state)

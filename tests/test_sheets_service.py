@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 
 from bot.models.diary import DiaryRecord
 from bot.models.state import BotState
@@ -195,3 +195,36 @@ async def test_get_settings(mock_sheets_service):
     assert settings["TARGET_CALORIES"] == 2000.0
     assert settings["TIMEZONE"] == "Asia/Almaty"
     assert settings["DAY_CUTOFF_HOUR"] == 4
+
+
+@pytest.mark.asyncio
+async def test_state_ttl_auto_clear(mock_sheets_service):
+    old_time = datetime.now(timezone.utc) - timedelta(minutes=35)
+    state = BotState(
+        pending_action="EDIT_RECORD",
+        target_record_id="rec-old-1",
+        last_processed_update_id=555,
+        updated_at=old_time,
+    )
+    await mock_sheets_service.set_state(state)
+
+    active_state = await mock_sheets_service.get_state()
+    assert active_state.pending_action is None
+    assert active_state.target_record_id is None
+    assert active_state.last_processed_update_id == 555
+
+
+@pytest.mark.asyncio
+async def test_clear_state_explicit(mock_sheets_service):
+    state = BotState(
+        pending_action="EDIT_RECORD",
+        target_record_id="rec-1",
+        last_processed_update_id=556,
+        updated_at=datetime.now(timezone.utc),
+    )
+    await mock_sheets_service.set_state(state)
+    await mock_sheets_service.clear_state()
+
+    current_state = await mock_sheets_service.get_state()
+    assert current_state.pending_action is None
+    assert current_state.last_processed_update_id == 556
