@@ -41,8 +41,10 @@
 - Реализованы базовые Pydantic-модели (`FoodItem`, `FoodPayload`, `ActivityItem`, `DiaryRecord`, `BotState`, `ParsedIntent`, `IntentType`).
 - Реализован `NutritionService` для расчета, суммирования и масштабирования порций КБЖУ, форматирования сводок за день и приемов пищи.
 - Реализована функция `calculate_food_date(dt, cutoff_hour, tz_name)` с поддержкой таймзоны (Asia/Almaty) и отсечки ночного времени.
-- Реализован `SheetsService` со всеми асинхронными обертками (`asyncio.to_thread`), методами работы со всеми листами таблицы и идемпотентностью `update_id`.
-- Реализованы LLM-сервисы: `GeminiService` (структурированный JSON, retry, multimodal) и `GroqService` (Whisper-large-v3).
+- Реализован `SheetsService` со всеми асинхронными обертками (`asyncio.to_thread`), методами работы со всеми листами таблицы, идемпотентностью `update_id` и поддержкой локализованных чисел (запятая/точка).
+- Реализованы LLM-сервисы: `GeminiService` (структурированный JSON, retry, multimodal, fallback на flash-lite) и `GroqService` (Whisper-large-v3).
 - Реализованы DomainHandler и aiogram роутер с поддержкой текста, голосовых, фото и команд.
 - Реализован stateless aiohttp сервер (`bot/main.py`) с валидацией секретного токена webhook, проверкой идемпотентности и эндпоинтами Cloud Scheduler (`/jobs/reminder`, `/jobs/daily-report`).
-- Написано 34 модульных и интеграционных теста (`pytest`), 100% тестов проходят, линтер `flake8` проходит без замечаний.
+- Автоматически инициализирована боевая Google Таблица пользователя со всеми 6 листами и заголовками (`scripts/init_sheets.py`).
+- Написано 35 модульных и интеграционных тестов (`pytest`), 100% тестов проходят, линтер `flake8` проходит без замечаний.
+- **Runtime Verification пройден:** бот запущен в реальном времени, подключен к Telegram, Google Sheets, Groq и Gemini, пользователь успешно выполнил сквозной сценарий (запись еды и получение сводки `/today`).
