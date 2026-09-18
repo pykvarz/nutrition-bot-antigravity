@@ -220,3 +220,38 @@ async def test_callback_actions(mock_sheets):
     saved_state = mock_sheets.set_state.call_args[0][0]
     assert saved_state.pending_action == "EDIT_RECORD"
     assert saved_state.target_record_id == "rec-buttons-1"
+
+
+@pytest.mark.asyncio
+async def test_handle_settings_update(mock_sheets):
+    nutrition_service = NutritionService()
+    handler = DomainHandler(sheets_service=mock_sheets, nutrition_service=nutrition_service)
+
+    mock_sheets.get_settings = AsyncMock(return_value={
+        "TARGET_CALORIES": 2000.0,
+        "TARGET_PROTEIN": 140.0,
+        "TARGET_FAT": 60.0,
+        "TARGET_CARBS": 220.0,
+        "TIMEZONE": "Asia/Almaty",
+        "DAY_CUTOFF_HOUR": 4,
+    })
+    mock_sheets.update_settings = AsyncMock(return_value={
+        "TARGET_CALORIES": 1800.0,
+        "TARGET_PROTEIN": 160.0,
+        "TARGET_FAT": 60.0,
+        "TARGET_CARBS": 220.0,
+        "TIMEZONE": "Asia/Almaty",
+        "DAY_CUTOFF_HOUR": 4,
+    })
+    mock_sheets.log_action = AsyncMock()
+
+    intent = ParsedIntent(
+        intent=IntentType.SETTINGS,
+        raw_text="поставь цель 1800 калорий и 160 белка",
+        details={"settings_update": {"TARGET_CALORIES": 1800.0, "TARGET_PROTEIN": 160.0}},
+    )
+    res = await handler.process_intent(intent, update_id=301)
+    assert "1800" in res
+    assert "160" in res
+    assert mock_sheets.update_settings.called
+    assert mock_sheets.log_action.called

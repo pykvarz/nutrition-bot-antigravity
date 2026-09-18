@@ -228,3 +228,13 @@ async def test_clear_state_explicit(mock_sheets_service):
     current_state = await mock_sheets_service.get_state()
     assert current_state.pending_action is None
     assert current_state.last_processed_update_id == 556
+
+
+@pytest.mark.asyncio
+async def test_update_settings_allowed_and_disallowed(mock_sheets_service):
+    updated = await mock_sheets_service.update_settings({
+        "TARGET_CALORIES": 1850.0,
+        "TIMEZONE": "Europe/Moscow",
+    })
+    assert updated["TARGET_CALORIES"] == 1850.0
+    assert updated["TIMEZONE"] == "Asia/Almaty"

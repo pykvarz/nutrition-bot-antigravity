@@ -236,6 +236,31 @@ class SheetsService:
                     settings[k] = v
         return settings
 
+    async def update_settings(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        return await asyncio.to_thread(self._sync_update_settings, updates)
+
+    def _sync_update_settings(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        ALLOWED = {"TARGET_CALORIES", "TARGET_PROTEIN", "TARGET_FAT", "TARGET_CARBS"}
+        filtered = {k: _safe_float(v) for k, v in updates.items() if k in ALLOWED}
+        if not filtered:
+            return self._sync_get_settings()
+
+        ws = self._get_spreadsheet().worksheet("Настройки")
+        rows = ws.get_all_values()
+        header = rows[0] if rows else ["Ключ", "Значение"]
+
+        current_dict = {}
+        for row in rows[1:]:
+            if row and row[0]:
+                current_dict[row[0].strip()] = row[1] if len(row) > 1 else ""
+
+        for k, v in filtered.items():
+            current_dict[k] = str(v)
+
+        new_rows = [header] + [[k, str(v)] for k, v in current_dict.items()]
+        ws.update(new_rows)
+        return self._sync_get_settings()
+
     # -------------------------------------------------------------
     # 4. Шаблоны и Рецепты
     # -------------------------------------------------------------

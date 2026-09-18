@@ -89,6 +89,25 @@ class DomainHandler:
             return self._generate_quick_advice(records, settings)
 
         elif intent.intent == IntentType.SETTINGS:
+            updates = intent.details.get("settings_update")
+            if updates and isinstance(updates, dict):
+                before_json = json.dumps({k: settings.get(k) for k in updates if k in settings})
+                new_settings = await self.sheets_service.update_settings(updates)
+                await self.sheets_service.log_action(
+                    action_type="UPDATE_SETTINGS",
+                    entity_type="Settings",
+                    entity_id="user_settings",
+                    before_json=before_json,
+                    after_json=json.dumps(updates),
+                )
+                return (
+                    f"⚙️ <b>Цели обновлены:</b>\n"
+                    f"🎯 Калории: {new_settings.get('TARGET_CALORIES', 2000):g} ккал\n"
+                    f"🥩 Белки: {new_settings.get('TARGET_PROTEIN', 140):g} г\n"
+                    f"🥑 Жиры: {new_settings.get('TARGET_FAT', 60):g} г\n"
+                    f"🍞 Углеводы: {new_settings.get('TARGET_CARBS', 220):g} г\n"
+                    f"⏰ Часовой пояс: {tz_name} (cutoff: {cutoff_hour}:00)"
+                )
             return (
                 f"⚙️ <b>Текущие настройки:</b>\n"
                 f"🎯 Калории: {settings.get('TARGET_CALORIES', 2000):g} ккал\n"
